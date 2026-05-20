@@ -1,0 +1,11 @@
+---
+description: Vast.ai is the GPU compute backend referenced in this project. Use the vastai skill for any GPU lifecycle operations.
+globs: "**/*.tf, **/*.yaml, **/*.yml, deploy/**/*, infra/**/*"
+alwaysApply: false
+---
+
+# vastai (Vast.ai GPU rental)
+
+When editing IaC files or anything that references GPU compute, load the `vastai` skill at `.cursor/skills/vastai/SKILL.md` (or wherever Cursor discovered it) for the full CLI surface — search offers, launch instances, SSH, copy files, volumes, serverless endpoints, billing.
+
+The skill is the source of truth. Don't restate vastai commands inline here.
