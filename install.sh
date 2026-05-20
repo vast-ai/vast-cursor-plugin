@@ -46,12 +46,38 @@ RULE_SRC="$REPO/.cursor/rules/vastai.mdc"
 if [[ $MODE == user ]]; then
   ROOT="$HOME/.cursor"
 elif [[ -n "$TARGET" ]]; then
-  ROOT="$(cd "$TARGET" && pwd)/.cursor"
+  # `realpath -m` canonicalizes without requiring the dir to exist (matters for
+  # --dry-run against a non-existent target). Falls back to a manual resolve
+  # if realpath is missing (rare on Linux).
+  if command -v realpath >/dev/null 2>&1; then
+    ROOT="$(realpath -m "$TARGET")/.cursor"
+  else
+    ROOT="$(mkdir -p "$TARGET" && cd "$TARGET" && pwd)/.cursor"
+  fi
 else
   ROOT="$PWD/.cursor"
 fi
 SKILL_DST="$ROOT/skills/vastai/SKILL.md"
 RULE_DST="$ROOT/rules/vastai.mdc"
+
+# When invoked from inside the plugin repo with no --target, the default
+# `$PWD/.cursor` IS the source dir → self-copy. Silently promote to a global
+# (--user) install so the script always succeeds for that common case.
+if [[ "$SKILL_SRC" -ef "$SKILL_DST" || "$RULE_SRC" -ef "$RULE_DST" ]]; then
+  if [[ $MODE == project && -z "$TARGET" ]]; then
+    echo "notice: \$PWD is the plugin repo itself; installing globally into ~/.cursor instead." >&2
+    MODE=user
+    ROOT="$HOME/.cursor"
+    SKILL_DST="$ROOT/skills/vastai/SKILL.md"
+    RULE_DST="$ROOT/rules/vastai.mdc"
+    echo "  new target: $ROOT" >&2
+    echo
+  else
+    echo "error: source and destination are the same directory ($ROOT)." >&2
+    echo "       pass --target <dir> or use --user." >&2
+    exit 1
+  fi
+fi
 
 run() { if [[ $DRY -eq 1 ]]; then echo "[dry-run] $*"; else eval "$@"; fi; }
 
