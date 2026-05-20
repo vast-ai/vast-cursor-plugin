@@ -1,0 +1,24 @@
+{
+  "name": "vastai",
+  "displayName": "Vast.ai",
+  "version": "0.1.0",
+  "description": "Rent, launch, monitor, and tear down Vast.ai GPU instances from Cursor. Manage volumes, serverless endpoints, environment variables, and billing through natural language.",
+  "author": {
+    "name": "Vast.ai",
+    "email": "support@vast.ai"
+  },
+  "license": "MIT",
+  "keywords": [
+    "vastai",
+    "vast-ai",
+    "gpu",
+    "cloud",
+    "infrastructure",
+    "ml",
+    "training"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vast-ai/vast-cursor-plugin"
+  }
+}

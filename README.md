@@ -2,8 +2,9 @@
 
 A [Cursor](https://cursor.com) plugin for [Vast.ai](https://vast.ai). Rent, launch, monitor, and tear down GPU instances — plus volumes, serverless endpoints, and billing.
 
-- **A bundled `vastai` skill** at `.cursor/skills/vastai/SKILL.md` gives Cursor full command-reference knowledge of the `vastai` CLI (ssh, copy, logs, exec, destroy, volumes, serverless, environment variables, …).
-- **An auto-attach rule** at `.cursor/rules/vastai.mdc` fires when you're editing IaC files (`*.tf`, `*.yaml`, `infra/`, `deploy/`) and points Cursor at the skill.
+- **A bundled `vastai` skill** at `skills/vastai/SKILL.md` gives Cursor full command-reference knowledge of the `vastai` CLI (ssh, copy, logs, exec, destroy, volumes, serverless, environment variables, …).
+- **An auto-attach rule** at `rules/vastai.mdc` fires when you're editing IaC files (`*.tf`, `*.yaml`, `infra/`, `deploy/`) and points Cursor at the skill.
+- **A `.cursor-plugin/plugin.json` manifest** so the repo is a valid Cursor 2.5 plugin, eligible for the Marketplace and the `/add-plugin` install flow.
 
 Cursor's UX is single-skill + natural-language, so there are no slash commands to memorise — just describe what you want.
 
@@ -30,25 +31,23 @@ vastai --version
 
 A working Vast.ai account; grab an API key from <https://cloud.vast.ai/account>.
 
-### Per-project
+### Marketplace (recommended once published)
+
+In Cursor 2.5+, browse [cursor.com/marketplace](https://cursor.com/marketplace) or run `/add-plugin vastai` inside the editor. The `.cursor-plugin/plugin.json` manifest in this repo makes it eligible for that flow.
+
+### Clone + install.sh
+
+For installs ahead of marketplace acceptance, or for power users who want to track upstream with `git pull`:
 
 ```bash
-git clone https://github.com/vast-ai/vast-cursor-plugin.git /tmp/vast-cursor-plugin
+git clone https://github.com/vast-ai/vast-cursor-plugin.git ~/code/vast-cursor-plugin
+~/code/vast-cursor-plugin/install.sh --user   # → ~/.cursor/ (global)
+# or
 cd /path/to/your/project
-/tmp/vast-cursor-plugin/install.sh           # copies into ./.cursor/
+~/code/vast-cursor-plugin/install.sh          # → ./.cursor/ (project-local)
 ```
 
-### Globally
-
-```bash
-/tmp/vast-cursor-plugin/install.sh --user    # copies into ~/.cursor/
-```
-
-`--force` to upgrade in place. `--dry-run` to preview.
-
-### Alternative — GitHub URL import
-
-Per [Cursor's docs](https://cursor.com/docs/skills), Cursor can import skills from a GitHub repo URL directly. Point Cursor at `https://github.com/vast-ai/vast-cursor-plugin` and it'll discover `.cursor/skills/vastai/SKILL.md`.
+`--force` to upgrade in place. `--dry-run` to preview. Running from inside the cloned plugin repo auto-promotes to `--user` (since `$PWD/.cursor` would self-copy).
 
 ## First run
 
@@ -62,16 +61,17 @@ The skill auto-loads and walks through `vastai set api-key …` → `vastai crea
 
 ```
 vast-cursor-plugin/
-├── install.sh                       # copies into ./.cursor/ or ~/.cursor/
-├── .cursor/
-│   ├── skills/vastai/
-│   │   └── SKILL.md                 # vendored from vast-ai/vast-cli
-│   └── rules/
-│       └── vastai.mdc               # auto-attach rule for IaC files
+├── .cursor-plugin/
+│   └── plugin.json                  # Cursor 2.5 manifest (name, version, author, …)
+├── skills/vastai/
+│   └── SKILL.md                     # vendored from vast-ai/vast-cli
+├── rules/
+│   └── vastai.mdc                   # auto-attach rule for IaC files
+├── install.sh                       # pre-marketplace install: copies into ./.cursor/ or ~/.cursor/
 ├── VENDORED_FROM.md                 # pins the upstream SHA
 └── PATCHES.md                       # local deltas pending upstream PRs
 ```
 
 ## License
 
-MIT — see [LICENSE](./LICENSE). `SKILL.md` is vendored from [`vast-ai/vast-cli`](https://github.com/vast-ai/vast-cli) (also MIT); local edits are tracked in [`PATCHES.md`](./PATCHES.md) for upstream propagation.
+MIT — see [LICENSE](./LICENSE). `skills/vastai/SKILL.md` is vendored from [`vast-ai/vast-cli`](https://github.com/vast-ai/vast-cli) (also MIT); local edits are tracked in [`PATCHES.md`](./PATCHES.md) for upstream propagation.

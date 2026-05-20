@@ -40,8 +40,10 @@ USAGE
 done
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
-SKILL_SRC="$REPO/.cursor/skills/vastai/SKILL.md"
-RULE_SRC="$REPO/.cursor/rules/vastai.mdc"
+# Source files live at the Cursor plugin-spec paths (skills/, rules/) at the
+# repo root. install.sh copies them into the user/project .cursor/ tree.
+SKILL_SRC="$REPO/skills/vastai/SKILL.md"
+RULE_SRC="$REPO/rules/vastai.mdc"
 
 if [[ $MODE == user ]]; then
   ROOT="$HOME/.cursor"
@@ -60,23 +62,18 @@ fi
 SKILL_DST="$ROOT/skills/vastai/SKILL.md"
 RULE_DST="$ROOT/rules/vastai.mdc"
 
-# When invoked from inside the plugin repo with no --target, the default
-# `$PWD/.cursor` IS the source dir → self-copy. Silently promote to a global
-# (--user) install so the script always succeeds for that common case.
-if [[ "$SKILL_SRC" -ef "$SKILL_DST" || "$RULE_SRC" -ef "$RULE_DST" ]]; then
-  if [[ $MODE == project && -z "$TARGET" ]]; then
-    echo "notice: \$PWD is the plugin repo itself; installing globally into ~/.cursor instead." >&2
-    MODE=user
-    ROOT="$HOME/.cursor"
-    SKILL_DST="$ROOT/skills/vastai/SKILL.md"
-    RULE_DST="$ROOT/rules/vastai.mdc"
-    echo "  new target: $ROOT" >&2
-    echo
-  else
-    echo "error: source and destination are the same directory ($ROOT)." >&2
-    echo "       pass --target <dir> or use --user." >&2
-    exit 1
-  fi
+# If $PWD is the plugin repo itself (detected via the manifest file), a default
+# project install would create a stray `.cursor/` dir inside the source repo.
+# Silently promote to a global (--user) install so the script always does the
+# right thing for that common case.
+if [[ $MODE == project && -z "$TARGET" && -f "$REPO/.cursor-plugin/plugin.json" && "$PWD" -ef "$REPO" ]]; then
+  echo "notice: \$PWD is the plugin repo itself; installing globally into ~/.cursor instead." >&2
+  MODE=user
+  ROOT="$HOME/.cursor"
+  SKILL_DST="$ROOT/skills/vastai/SKILL.md"
+  RULE_DST="$ROOT/rules/vastai.mdc"
+  echo "  new target: $ROOT" >&2
+  echo
 fi
 
 run() { if [[ $DRY -eq 1 ]]; then echo "[dry-run] $*"; else eval "$@"; fi; }
