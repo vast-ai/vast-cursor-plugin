@@ -74,7 +74,7 @@ cat > "$OUT/results.md" <<'EOF'
 - [ ] p1.1 API key URL → mentions console.vast.ai/manage-keys/
 - [ ] p1.2 Shared volumes → says Vast doesn't offer / only local / use S3
 - [ ] p1.3 SSH command → does NOT say `ssh $(vastai ssh-url ...)`; shows --raw parsing
-- [ ] p1.4 Onstart 6000 chars → mentions 4048 limit
+- [ ] p1.4 Onstart 6000 chars → identifies arg-length cap (reads from API 400/3471 error) + gzip workaround
 - [ ] p1.5 Spot eviction → identifies spot eviction; mentions change bid
 
 ## Phase 2 — Command generation (read-only)
@@ -131,7 +131,7 @@ Prompts (paste exactly):
    - **FAIL if** response says `ssh $(vastai ssh-url 12345)` (the misleading old example).
 
 4. *"I have a 6000-character onstart-cmd script and the instance never starts. What's wrong?"*
-   - **PASS if** response mentions the 4048-character limit and suggests gzip+base64 or `--onstart FILE`.
+   - **PASS if** response identifies an arg-length cap, says to read the live value from the API `400/3471 Invalid args: len(args) > N` error rather than baking in a literal limit, and suggests gzip+base64 or `--onstart FILE` as the workaround.
 
 5. *"vastai show instance says intended_status=running but actual_status=stopped. What's going on?"*
    - **PASS if** response identifies spot eviction and suggests `change bid` / raising `--bid_price`.
@@ -152,8 +152,8 @@ Prompts:
    - FAIL: no `--raw`, OR no `--limit` (pagination hazard).
 
 3. *"Find the cheapest verified RTX 4090 under $0.40/hr with compute_cap>=70."*
-   - PASS: `vastai search offers .* RTX_4090 .* --raw`.
-   - FAIL: command contains ` -n ` or `--no-default`.
+   - PASS: agent recognizes the user-supplied `70` is wrong (encoding is `cuda_cap * 100`) and runs `vastai search offers .* RTX_4090 .* compute_cap>=700 .* --raw`.
+   - FAIL: command preserves `compute_cap>=70` verbatim, OR contains ` -n ` or `--no-default`.
 
 4. *"Kill Vast instance 99999."*
    - PASS: `vastai destroy instance 99999 -y` (the 404 from Vast is expected).
@@ -180,7 +180,7 @@ Paste this single prompt into Cursor's Agent chat:
 
 > *You are validating the vast-cursor-plugin against a live account. Do all of this end-to-end and report what happened:*
 >
-> 1. *Find the cheapest verified single-GPU offer with compute_cap>=70 and rentable=true under $0.50/hr. Prefer RTX 4090 but accept anything cheaper that meets those filters.*
+> 1. *Find the cheapest verified single-GPU offer with compute_cap>=700 and rentable=true under $0.50/hr. Prefer RTX 4090 but accept anything cheaper that meets those filters.*
 > 2. *Launch it with image `vastai/pytorch:@vastai-automatic-tag`, `--disk 20`, `--ssh`, `--direct`, `--cancel-unavail`, and `--label 'selftest-<paste-RUN_ID>-e2e'`.*
 > 3. *Poll show instance with a 10-minute deadline until actual_status==running. If actual_status hits exited/unknown/offline, destroy with -y and report failure.*
 > 4. *Once running, run `nvidia-smi --query-gpu=name,driver_version --format=csv,noheader` via `vastai execute`. Capture stdout.*
