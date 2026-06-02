@@ -10,10 +10,11 @@
 # returns useful output. (The `vastai execute` discovery — accepts the
 # syntax per --help, then crashes on real input — is exactly why.)
 #
-# Cursor gotcha: the skill's `globs` are scoped to .tf / .yaml / deploy /
-# infra files. Force-load it by opening a workspace with one of those file
-# types, referencing @vastai in chat, or temporarily setting alwaysApply:
-# true in rules/vastai.mdc. A "skill never loaded" pass is meaningless.
+# Cursor: the rule's globs cover common file types (.py, .sh, .yaml, .tf,
+# Dockerfile, docker-compose, deploy/, infra/, scripts/) with alwaysApply
+# true, so the skill loads in any workspace. Sanity-check by asking the
+# agent "what skill do you use for Vast.ai operations?" before testing —
+# a "skill never loaded" PASS is meaningless.
 #
 # Some prompts will spend money or mutate the account: launching instances,
 # placing bids, creating teams/subaccounts, inviting members, running
@@ -28,10 +29,22 @@
 # <INSTANCE_ID>       → real instance from `vastai show instances-v1 --raw -a`
 # <SPOT_INSTANCE_ID>  → real spot instance (launched with --bid_price). If
 #                       you don't have one, run the spot-launch prompt first.
-# <TEMPLATE_HASH>     → real hash from `vastai search templates ... --raw`
+# <TEMPLATE_HASH>     → real hash from `vastai search templates '...' --raw`
+# <TEMPLATE_ID>       → real numeric `id` field from `vastai search templates`
 # <ENDPOINT_ID>       → real endpoint id from `vastai show endpoints --raw`
 #                       (these require admin-scope keys; skip the prompt if
 #                       no real value is reachable)
+#
+# Notes on a few prompts:
+#  - The spot/bid launch prompt below picks the bid AT OR ABOVE the offer's
+#    `min_bid` field. Don't hardcode a number; the agent should read min_bid
+#    first.
+#  - "Display HF_TOKEN value" tests the correct refusal (CLI returns masked
+#    values; the skill says env-vars are write-only). PASS = explains that;
+#    FAIL = attempts a flag or workaround.
+#  - "Activate 2FA" needs interactive input from the real shell — agents
+#    can't complete it standalone. PASS = walks the user through the command
+#    and stops; FAIL = pastes a literal TOTP code.
 
 
 I need to create a Vast.ai API key — give me the link.
@@ -50,7 +63,7 @@ Launch a Vast instance from offer <OFFER_ID>.
 
 Launch offer <OFFER_ID> with an --onstart-cmd that installs a long list of apt packages, clones two repos, and runs a setup script.
 
-Launch the cheapest spot/interruptible RTX 3090 with a bid of $0.10/hr.
+Launch the cheapest interruptible (spot) RTX 3090 — pick the bid at or just above the offer's min_bid.
 
 List all of my Vast instances.
 
@@ -70,7 +83,7 @@ Display the actual value of my HF_TOKEN account env var.
 
 Create a new team called "platform-team".
 
-Invite alice@example.com to my team as a billing-admin.
+Invite alice@example.com to my team — pick any role from `vastai show team-roles`.
 
 Activate 2FA on my account using my TOTP secret.
 
@@ -80,4 +93,4 @@ Create a serverless workergroup for endpoint <ENDPOINT_ID> using template hash <
 
 Benchmark template <TEMPLATE_HASH> across 1, 2, and 4 GPUs.
 
-Delete template <TEMPLATE_HASH>.
+Delete template <TEMPLATE_ID>.
