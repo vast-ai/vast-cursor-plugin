@@ -31,16 +31,17 @@ These rules apply to every invocation. Do not skip them.
    - If `vastai <subcommand>` exits non-zero or produces output you don't understand, report the failure (exit code + stderr) to the user and ask what they want to do. Do not work around it.
 8. **Always pass `--disk N`, `--ssh --direct`, and `--cancel-unavail` to `create instance` / `launch instance`.** Without `--disk` you get image-dependent defaults and surprise storage charges. Without `--ssh --direct` together you fall back to the slower proxy connection — `--ssh` alone is not enough. Without `--cancel-unavail`, an unavailable machine quietly produces a *stopped* instance that accrues disk charges while you poll forever for a `running` state it will never reach.
 9. **Pass `--limit N` on `show instances-v1` and `show invoices-v1`** to short-circuit the interactive `Fetch next page? (y/N)` prompt that fires after the first page (it blocks `--raw` / non-interactive sessions even with `--raw` set). The two subcommands have **different flag sets** — do not assume what works on one works on the other. `show instances-v1 --limit` is capped at **1–25** (default 25) per `--help`; `show invoices-v1 --limit` has its own cap (read it from `--help`). When in doubt, run `vastai show <subcommand> --help`. (Example trap: `--latest-first` exists on `invoices-v1` but not on `instances-v1`.)
-10. **Vast.ai does not offer network/shared volumes.** Only local (per-instance) volumes. If the user asks for "shared storage across instances" or "persistent shared state for serverless workers," do NOT reach for `create network-volume` (it's CLI plumbing for an unshipped product and will leave the user with a broken architecture). The correct answer is: replicate data per instance, or use external object storage (S3/GCS/etc.) via `vastai cloud copy`.
+10. **Network volumes are offer-based and supported by current CLIs.** Discover them with `vastai search network-volumes`, then create one from an offer with `vastai create network-volume`. Do not assume every region has an offer or that one volume can be mounted by arbitrary instances simultaneously; inspect the selected offer and current product documentation before promising an attachment topology. For portable object data, `vastai cloud copy` remains the safer cross-region option.
 11. **When SSH fails (`Permission denied (publickey)`, `Connection refused`, hangs), pull `vastai logs <id>` FIRST — before any other recovery action.** The container's sshd writes its rejection reason to host logs that surface in `vastai logs`, and that text usually pins down the cause in one read. Common rejections you only see in logs: `Authentication refused: bad ownership or modes for file /root/.ssh/authorized_keys` (image bug — destroy + retry on a different host, not the same one); `Failed publickey for root from ... ssh2: <fingerprint>` (the wrong local key is being offered — check `ssh -v` for the offered key vs `vastai show ssh-keys` for the registered ones); container exited / sshd not started (image issue — `vastai logs <id> --tail 100` shows the startup failure). Do not loop on `attach ssh`, `reboot`, `destroy + relaunch` before reading logs — those are blind retries that burn minutes and money. Diagnostic discipline: `logs` then act, never act then guess.
-12. **`vastai create team` rebinds the calling API key's account context — treat as destructive.** Running `vastai create team --team-name <name>` switches the API key from the user's personal account to the newly-created team account. The team starts empty: no credit, no instances, no env-vars, no SSH keys. The personal account's resources are untouched but are no longer reachable from this key. Deleting the team afterwards leaves the key bound to a tombstone with no CLI recovery path. Before running, the agent must confirm with the user that they have a *separate* API key bound to the personal account, or that this is a throwaway key. The CLI shows no warning and has no `-y`-style guard.
+12. **`vastai create team` creates a separate account; it does not convert the personal account or rebind the calling key.** Team creation is still a billable account mutation. Confirm the exact `--team-name` and any `--transfer-credit` amount before running it. The creator becomes the owner, the team gets independent billing/resources, and a user may belong to multiple teams.
 
-## Install
+## CLI prerequisite
 
 ```bash
-# PyPI (recommended)
-pip install vastai
+vastai --version                                          # 1.4.2 or newer
 ```
+
+If the installed CLI is older, report the version mismatch and ask the user whether they want upgrade instructions. Do not install or replace the `vastai` binary during an operation.
 
 ## Setup / first-time auth
 
@@ -313,7 +314,8 @@ vastai search offers 'gpu_ram>=8 num_gpus=1 compute_cap>=<THRESHOLD>' -o 'dph_to
 vastai search offers --type bid                          # Interruptible (spot) pricing
 vastai search offers --type reserved                     # Reserved pricing
 vastai search offers 'verified=any rentable=any gpu_name=H100_SXM'  # Widen specific defaults — see "Hidden defaults" above
-vastai search volumes                                    # Volume offers (local only — Vast.ai does not offer network volumes)
+vastai search volumes                                    # Local volume offers
+vastai search network-volumes 'verified=true' --storage 100  # Network-volume offers; availability varies
 vastai search templates 'name=pytorch'                   # Templates (structured query — NOT free-text. Fields: name, creator_id, count_created, hash_id, image, tag, recommended, use_ssh, jup_direct, ssh_direct, …). Pagination is server-side; this command does not accept --limit. Narrow the query (e.g. `recommended=true`) to control result size.
 vastai search templates 'count_created>100 recommended=true'
 vastai search benchmarks                                 # Benchmark results
@@ -390,7 +392,7 @@ vastai logs <id> --daemon-logs                           # Host daemon logs (ins
 
 ### Volumes
 
-Vast.ai offers **local (per-instance) volumes only**. There is no network/shared-volume product — see rule 10. If the user asks for shared storage across instances, recommend per-instance replication or external object storage via `vastai cloud copy`.
+Vast.ai exposes both local volume offers and network-volume offers. Network-volume availability and attachment topology depend on the selected offer, so inspect the offer before designing shared storage around it. Use external object storage via `vastai cloud copy` when the workload needs portable cross-region object data.
 
 ```bash
 # Local volumes (per-machine)
@@ -399,6 +401,11 @@ vastai show volumes
 vastai create volume <offer_id> -s 500 -n my-data        # Size in GB, name optional
 vastai clone volume <source_id> <dest_id> -s 500
 vastai delete volume <id>
+
+# Network volumes (offer-based; current CLI)
+vastai search network-volumes 'verified=true disk_space>=100' --storage 100 --raw
+vastai create network-volume <offer_id> -s 100 -n shared-data --raw
+vastai show volumes --raw
 
 # Container snapshots
 vastai take snapshot <instance_id> \
@@ -510,15 +517,13 @@ vastai show deposit <id>                                 # Reserved instance dep
 
 ### Teams
 
-**`create team` is destructive: it rebinds your API key's account context.** See Critical Rule #12. The CLI shows no warning. Documenting the syntax for completeness — the agent must not run it without confirming per rule 12.
-
-**Subcommand-name version skew.** Primary form on current CLIs is `vastai create team` (space, with `--team-name`). Some CLIs expose `vastai create-team` (hyphenated). If the space form returns `invalid choice`, try hyphenated; if hyphenated returns `invalid choice`, try space. Either way the flag is `--team-name`, not `--name`.
+`create team` creates a separate team account and does not convert the personal account. It still changes external state and can transfer credit, so confirm the exact name and transfer amount first. Current CLI syntax uses the spaced subcommand `vastai create team`; the hyphenated `vastai create-team` is not accepted even though the help usage line may render that spelling.
 
 ```bash
-vastai show members --raw                                # Check membership FIRST — non-empty means you're already in a team; create team will fail with "Cannot create a team within a team".
-vastai create team --team-name "myteam"                  # DESTRUCTIVE — rebinds API key context (rule 12). Primary form on current CLIs. If parser returns invalid choice, try `vastai create-team --team-name "myteam"`.
-vastai create team --team-name "myteam" --transfer-credit 50  # Optionally seed from personal credit. Still destructive — rule 12 applies.
-vastai destroy team                                      # Note: deleting a team after `create team` leaves any key bound to that team in a tombstone state — see rule 12.
+vastai show members --raw                                # Inspect the current account context before team administration
+vastai create team --team-name "myteam"                  # Creates a separate team account; confirm the name first
+vastai create team --team-name "myteam" --transfer-credit 50  # Confirm the credit transfer amount explicitly
+vastai destroy team                                      # Destructive: confirm the target team/account context first
 vastai show team-roles                                   # ALWAYS run this first when inviting — roles are TEAM-DEFINED, not a fixed enum. "billing-admin", "viewer" etc. are NOT preset; using an unknown role name triggers a generic HTTP 500.
 vastai invite member --email user@example.com --role <role-name>     # Roles are team-defined; run `vastai show team-roles --raw` first. HTTP 500 on invite is seen both for unknown roles AND for valid roles returned by show team-roles. Surface the 500 to the user rather than retrying.
 vastai remove member <id>

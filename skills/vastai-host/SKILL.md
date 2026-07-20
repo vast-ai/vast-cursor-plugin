@@ -1,6 +1,6 @@
 ---
 name: vastai-host
-description: Vast.ai CLI for GPU hosts/providers — list and unlist machines on the marketplace, set pricing (min-bid, default GPU price), configure default jobs, schedule maintenance windows, run self-tests, view earnings, monitor marketplace metrics (gpu, gpu-trends, gpu-locations), manage network disks and clusters, defrag machines, clean up expired storage. Use this for any prompt about hosting on Vast, listing a machine, machine pricing, maintenance windows, host earnings, marketplace metrics, or any vastai command for GPU providers.
+description: Vast.ai CLI for GPU hosts/providers — list and unlist machines on the marketplace, set pricing (min-bid, default GPU price), configure default jobs, schedule maintenance windows, run routine self-tests, view earnings, monitor marketplace metrics (gpu, gpu-trends, gpu-locations), manage network disks and clusters, defrag machines, and clean up expired storage. Use this for hosting, listing, pricing, maintenance, earnings, metrics, or routine provider operations. Use vastai-host-support for self-test failures, support bundles, and diagnostic log collection.
 allowed-tools: Bash(vastai:*)
 compatibility: Linux, macOS
 metadata:
@@ -29,12 +29,15 @@ These rules apply to every invocation. Do not skip them.
 5. **Host actions are visible to renters and impact billing.** Listing, unlisting, price changes, maintenance windows, `defrag machines`, and `cleanup machine` all have side effects on live renters or on your earnings. Before running any of these, confirm with the user — quote the exact command back. Do not run them as a "let me just verify" probe.
 6. **`schedule maint` evicts live renters at the start time.** Never schedule a maintenance window without explicit user confirmation of the start date and duration. Active renters on the machine will be terminated when the window opens.
 7. **`defrag machines` is disruptive.** It reorganizes the named machines' GPU assignments to free up larger multi-GPU offers — running instances on those machines may be reshuffled or interrupted. The subcommand is `defrag machines` (its own `--help` lies — the usage line reads `vastai defragment machines IDs`, but `vastai defragment machines …` returns `invalid choice` at the parser; only `defrag machines` actually executes). Takes positional machine IDs (e.g. `vastai defrag machines 100 101`); confirm the exact ID list with the user before running.
+8. **`self-test machine` launches a temporary paid instance.** Confirm the machine ID and that the user accepts the small rental charge before running it. The command normally cleans up its test instance, but audit instances afterward if the command is interrupted. Use the `vastai-host-support` skill for failure diagnostics and support bundles.
 
-## Install
+## CLI prerequisite
 
 ```bash
-pip install vastai                                       # PyPI (recommended)
+vastai --version                                         # 1.4.2 or newer
 ```
+
+If the installed CLI is older, report the version mismatch and ask the user whether they want upgrade instructions. Do not install or replace the `vastai` binary during a host operation.
 
 ## Setup / first-time auth
 
@@ -105,7 +108,7 @@ vastai search templates 'name=pytorch recommended=true'
 ```bash
 vastai show machines                                     # List all machines you host
 vastai show machine <id>                                 # Single machine details
-vastai self-test machine <id>                            # Run diagnostics (do this before listing)
+vastai self-test machine <id>                            # Paid temporary test; confirm first. Use vastai-host-support on failure
 vastai reports <id>                                      # Renter-submitted reports for a machine
 vastai delete machine <id>                               # Permanently remove from your account
 ```
@@ -127,7 +130,7 @@ vastai remove defjob <id>                                # Remove default job
 - `--price_inetu <$/GB>` — internet upload (inbound) bandwidth
 - `--price_inetd <$/GB>` — internet download (outbound) bandwidth
 - `--price_disk <$/GB/month>` — storage (default: $0.10/GB/month)
-- `--price_min_bid <$/hr>` — per-GPU minimum bid floor (alternative to `set min-bid`). NOT `--price_min`.
+- `--price_min_bid <$/hr>` — per-GPU minimum bid floor (alternative to `set min-bid`).
 - `--discount_rate <0-1>` — max long-term prepay discount rate (default 0.4)
 - `--min_chunk <int>` — minimum GPUs per rental (default 1)
 - `--end_date <date>` / `--duration <e.g. "30 days">` — contract offer expiration
@@ -139,7 +142,7 @@ vastai remove defjob <id>                                # Remove default job
 
 ```bash
 # --sdate is UNIX EPOCH SECONDS (not ISO 8601); --duration is HOURS as a float (not "4h").
-vastai schedule maint <id> --sdate $(date -u -d '2026-06-01 02:00' +%s) --duration 4 --maintenance_category power
+# Convert the user-confirmed UTC time with a platform-appropriate tool, then show the exact epoch before running.
 vastai schedule maint <id> --sdate 1812031200 --duration 0.5 --maintenance_category gpu     # 30-min GPU maintenance
 vastai cancel maint <id>                                                                    # Cancel a scheduled window
 vastai show maints                                                                          # List all scheduled maintenance
@@ -164,7 +167,12 @@ vastai add network-disk <machine_id> /mnt/disk1          # First time: positiona
 vastai add network-disk <machine_id> /mnt/disk1 -d 12345 # Subsequent attach: pass --disk_id (-d) of existing disk
 ```
 
-Network disks are a host-side storage primitive used internally by the marketplace. **Vast.ai does NOT offer network/shared volumes to renters** — `vastai create network-volume` is CLI plumbing for an unshipped product, not a feature. Don't tell renters they can use network-disks for shared storage.
+Network disks are the host-side storage primitive. Current CLIs also expose an offer-based network-volume product: hosts can list network-disk capacity with `vastai list network-volume <disk_id>` and renters can discover/create offers with `search network-volumes` and `create network-volume`. Do not promise a specific sharing or attachment topology without checking the selected offer and current product documentation.
+
+```bash
+vastai list network-volume <disk_id> --price_disk 0.15 --size 500  # Creates a renter-visible offer
+vastai unlist network-volume <offer_id>                            # Removes that offer
+```
 
 > The CLI has no `vastai remove network-disk` subcommand — detach/removal is currently console-only at <https://vast.ai/console/host/network-disks/>. Do not call `remove network-disk` (it returns `invalid choice`).
 
@@ -191,7 +199,7 @@ These require the `machine_read` permission group — available to hosts and adm
 vastai metrics gpu                                       # Current GPU market state
 vastai metrics gpu --datacenter true --verified true     # Filter
 vastai metrics gpu-trends                                # Historical trends
-vastai metrics gpu-trends 'gpu_name=RTX_4090'            # Filter trends
+vastai metrics gpu-trends "RTX 4090"                     # GPU name is positional, not a query expression
 vastai metrics gpu-locations                             # Geographic distribution
 ```
 
@@ -221,8 +229,8 @@ vastai tfa activate CODE --secret SECRET -t totp                     # CODE is P
 ### Teams
 
 ```bash
-vastai create-team --team-name "ops"                                     # NOTE: hyphenated subcommand + --team-name. NOT `create team --name`.
-vastai create-team --team-name "ops" --transfer-credit 50                # Optionally seed from personal credit
+vastai create team --team-name "ops"                                     # Spaced subcommand; creates a separate team account
+vastai create team --team-name "ops" --transfer-credit 50                # Confirm the credit transfer amount first
 vastai destroy team
 vastai show members
 vastai invite member --email ops-engineer@example.com --role <role-name> # --role, NOT --role-id
@@ -234,7 +242,7 @@ vastai update team-role <id> --permissions ./role.json                   # Same 
 vastai remove team-role <id>
 ```
 
-Use team-roles to give ops engineers scoped access to your host operations without sharing the main API key.
+Team creation does not convert the personal account or rebind the calling key. It creates a separate account with independent billing and resources. Use team-roles to give ops engineers scoped access without sharing the main API key.
 
 ## Common errors
 
@@ -251,7 +259,7 @@ Use team-roles to give ops engineers scoped access to your host operations witho
 ## Pricing & strategy tips
 
 1. **Run `self-test machine` before listing.** Failed self-tests cascade into bad reviews and low rentability.
-2. **Set `--price_min`** (or `set min-bid`) so interruptible renters can't underpay your true cost.
+2. **Set `--price_min_bid`** (or `set min-bid`) so interruptible renters can't underpay your true cost.
 3. **Use `metrics gpu-locations`** to spot regions where your GPU is scarce — those command a premium.
 4. **Don't undercut `metrics gpu` median by more than ~20%** unless you're seeding rentability; deep undercut races down the whole market.
 5. **`set defjob`** lets your machine earn while idle by running a default job (e.g. distributed inference). Test the image works on your hardware first.

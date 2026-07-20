@@ -10,7 +10,7 @@ Verify each before submitting. Cursor's reviewers will reject on any of these.
 - [ ] `name` is unique in the marketplace (search at cursor.com/marketplace first)
 - [ ] `displayName`, `version`, `description`, `author`, `license` all set
 - [ ] `logo` field points to a committed file (we use `assets/logo.svg`)
-- [ ] `skills/vastai/SKILL.md` has YAML frontmatter with `name` + `description`
+- [ ] All three skill directories contain `SKILL.md` with YAML frontmatter (`name`, `description`)
 - [ ] `rules/vastai.mdc` has YAML frontmatter with `description`
 - [ ] `LICENSE` file at repo root (MIT for this repo)
 - [ ] Repo is public on GitHub

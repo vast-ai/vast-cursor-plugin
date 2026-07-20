@@ -16,7 +16,7 @@ A runbook to verify the plugin end-to-end. Cursor is a GUI app with no scriptabl
 
 ```bash
 # 1. vastai CLI
-vastai --version                           # → 1.0.13 or newer
+vastai --version                           # → 1.4.2 or newer
 
 # 2. Vast API key in env (must be set BEFORE cursor was launched)
 echo "${VAST_API_KEY:?must export VAST_API_KEY first}"
@@ -43,10 +43,12 @@ Install user-globally so all Cursor workspaces see the plugin.
 # Verify files landed
 [ -f ~/.cursor/skills/vastai/SKILL.md ]      && echo "renter skill OK"      || echo "RENTER SKILL MISSING"
 [ -f ~/.cursor/skills/vastai-host/SKILL.md ] && echo "host skill OK"        || echo "HOST SKILL MISSING"
+[ -f ~/.cursor/skills/vastai-host-support/SKILL.md ] && echo "host support skill OK" || echo "HOST SUPPORT SKILL MISSING"
 [ -f ~/.cursor/rules/vastai.mdc ]            && echo "auto-attach rule OK"  || echo "RULE MISSING"
 
 diff -q "$PLUGIN/skills/vastai/SKILL.md"      ~/.cursor/skills/vastai/SKILL.md
 diff -q "$PLUGIN/skills/vastai-host/SKILL.md" ~/.cursor/skills/vastai-host/SKILL.md
+diff -q "$PLUGIN/skills/vastai-host-support/SKILL.md" ~/.cursor/skills/vastai-host-support/SKILL.md
 ```
 
 **Restart Cursor** before running behavioral phases — Cursor caches skills on launch.
@@ -72,7 +74,7 @@ cat > "$OUT/results.md" <<'EOF'
 
 ## Phase 1 — Knowledge probes
 - [ ] p1.1 API key URL → mentions console.vast.ai/manage-keys/
-- [ ] p1.2 Shared volumes → says Vast doesn't offer / only local / use S3
+- [ ] p1.2 Network volumes → recognizes offer-based support, names search/create commands, and avoids assuming attachment topology
 - [ ] p1.3 SSH command → does NOT say `ssh $(vastai ssh-url ...)`; shows --raw parsing
 - [ ] p1.4 Onstart 6000 chars → identifies arg-length cap (reads from API 400/3471 error) + gzip workaround
 - [ ] p1.5 Spot eviction → identifies spot eviction; mentions change bid
@@ -122,9 +124,8 @@ Prompts (paste exactly):
    - **PASS if** response includes `console.vast.ai/manage-keys/`.
    - **FAIL if** response says `cloud.vast.ai/account` (broken URL).
 
-2. *"Can I share a single volume across multiple Vast.ai instances at the same time?"*
-   - **PASS if** response says Vast doesn't offer that / only local volumes / recommends `cloud copy` to S3.
-   - **FAIL if** response suggests `vastai create network-volume`.
+2. *"Does the current Vast CLI support network volumes, and how do I discover and create one?"*
+   - **PASS if** response uses `search network-volumes` and `create network-volume`, notes offer/region availability, and avoids promising a sharing topology without checking the offer.
 
 3. *"Show me the exact shell command to ssh into Vast instance 12345 using the vastai CLI."*
    - **PASS if** response shows parsing `--raw` JSON (e.g. `ssh_host`/`ssh_port`) or the awk pattern.
@@ -238,11 +239,13 @@ bash -n "$PLUGIN/install.sh" && echo "p5.install-syntax PASS" || echo "p5.instal
 # Files in repo
 [ -f "$PLUGIN/skills/vastai/SKILL.md" ]      && echo "p5.skill-renter PASS" || echo "p5.skill-renter FAIL"
 [ -f "$PLUGIN/skills/vastai-host/SKILL.md" ] && echo "p5.skill-host PASS"   || echo "p5.skill-host FAIL"
+[ -f "$PLUGIN/skills/vastai-host-support/SKILL.md" ] && echo "p5.skill-host-support PASS" || echo "p5.skill-host-support FAIL"
 [ -f "$PLUGIN/rules/vastai.mdc" ]            && echo "p5.rule PASS"         || echo "p5.rule FAIL"
 
 # Install copied them (--user target)
 diff -q "$PLUGIN/skills/vastai/SKILL.md"      ~/.cursor/skills/vastai/SKILL.md      && echo "p5.installed-renter PASS" || echo "p5.installed-renter FAIL"
 diff -q "$PLUGIN/skills/vastai-host/SKILL.md" ~/.cursor/skills/vastai-host/SKILL.md && echo "p5.installed-host PASS"   || echo "p5.installed-host FAIL"
+diff -q "$PLUGIN/skills/vastai-host-support/SKILL.md" ~/.cursor/skills/vastai-host-support/SKILL.md && echo "p5.installed-host-support PASS" || echo "p5.installed-host-support FAIL"
 diff -q "$PLUGIN/rules/vastai.mdc"            ~/.cursor/rules/vastai.mdc            && echo "p5.installed-rule PASS"   || echo "p5.installed-rule FAIL"
 
 # Project-local install path also works

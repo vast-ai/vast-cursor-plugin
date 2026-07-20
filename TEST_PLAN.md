@@ -9,18 +9,13 @@ cd /Users/will/freelance/work/vast-plugins/workspace/repos/vast-cursor-plugin
 ./install.sh --user --force
 ```
 
-That copies `skills/vastai/SKILL.md` → `~/.cursor/skills/vastai/SKILL.md` and `rules/vastai.mdc` → `~/.cursor/rules/vastai.mdc`. The host skill isn't part of `install.sh` — copy it manually if you want to exercise host routing:
-
-```bash
-mkdir -p ~/.cursor/skills/vastai-host
-cp skills/vastai-host/SKILL.md ~/.cursor/skills/vastai-host/SKILL.md
-```
+That copies all three skills (`vastai`, `vastai-host`, and `vastai-host-support`) into `~/.cursor/skills/` and `rules/vastai.mdc` into `~/.cursor/rules/`.
 
 Pre-flight:
 
 ```bash
 echo "${VAST_API_KEY:?must export VAST_API_KEY first}"   # set BEFORE launching Cursor
-vastai --version                                          # 1.0.13+
+vastai --version                                          # 1.4.2+
 ```
 
 Reload Cursor and open a new Agent chat. The rule now has `alwaysApply: true` and broader globs, so the skill should load in any workspace. Sanity-check by asking *"What skill do you use for Vast.ai operations?"* — agent should mention `vastai`. A "skill never loaded" PASS is meaningless.
@@ -32,9 +27,9 @@ A passing run shows the agent reads from the skill and uses the correct CLI shap
 - **Correct flags first try.** Positional args where the docs say positional; underscores vs hyphens matching the actual command.
 - **No invented commands.** Agent never types `vastai show templates`, `vastai bid`, or similar non-existent subcommands.
 - **Surfaces server responses.** On 4xx/5xx, agent quotes the body verbatim and suggests a concrete next step (check scope, check deposit, upgrade CLI), not "let me retry."
-- **Destructive ops gated.** Rule #12 (`create team` rebinds API key context) fires before the agent runs it.
+- **Mutating ops gated.** Team creation is described as a separate account (not key rebinding), and the agent confirms the team name/credit transfer before running it. Paid host self-tests also require confirmation.
 
-A failing run reaches for `--ssh-key`, `--bid`, `pytorch/pytorch:@vastai-automatic-tag`, `cloud.vast.ai/account`, or runs `create team` without confirmation.
+A failing run reaches for `--ssh-key`, `--bid`, `pytorch/pytorch:@vastai-automatic-tag`, `cloud.vast.ai/account`, uses rejected `create-team`, claims team creation rebinds the key, or runs a paid self-test without confirmation.
 
 ## Coverage areas (cross-reference `TEST_PROMPTS.txt`)
 
@@ -45,8 +40,8 @@ Walk through `TEST_PROMPTS.txt` top to bottom. The prompts are grouped roughly b
 3. **Launch** — Vast-curated default image, `--ssh --direct --cancel-unavail`, materialization re-check, `--bid_price` for spot offers at or above `min_bid`.
 4. **Instance ops** — `show instances-v1 -a` (auto-paginate), `ssh` via parsed `ssh-url`, label/change-bid positional/flag forms.
 5. **Templates** — `--disk_space` (not `--disk`), `search templates` for discovery, `delete template --template-id <numeric>`.
-6. **Teams & account** — Rule #12 confirmation before `create team`, role lookup before `invite member`, env-vars treated as write-only.
-7. **Host routing** — host-side intents load `vastai-host` skill; 401 attributed to scope, not key reset.
+6. **Teams & account** — separate-account semantics and spaced `create team` syntax, role lookup before `invite member`, env-vars treated as write-only.
+7. **Host routing** — routine host intents load `vastai-host`; self-test failures and support bundles load `vastai-host-support`; 401 is attributed to scope, not key reset.
 
 ## Real-instance prep
 
@@ -79,4 +74,4 @@ Budget: a few dollars max if you fire the launch prompts; near-zero if you skip 
 
 ## When something fails
 
-The skill is the runbook. If the agent does the wrong thing, it's a skill bug — fix the relevant section in `skills/vastai/SKILL.md` (or `skills/vastai-host/SKILL.md`) and re-run the failing prompt. After a skill edit, run `./install.sh --user --force` and reload Cursor so the new content loads.
+The skill is the runbook. If the agent does the wrong thing, fix the relevant file under `skills/` and re-run the failing prompt. After a skill edit, run `./install.sh --user --force` and reload Cursor so the new content loads.
