@@ -2,9 +2,10 @@
 
 A [Cursor](https://cursor.com) plugin for [Vast.ai](https://vast.ai). Rent, launch, monitor, and tear down GPU instances — plus volumes, serverless endpoints, and billing. Hosts can also manage their machines, pricing, maintenance windows, and earnings.
 
-- **Two bundled skills** give Cursor full command-reference knowledge of the `vastai` CLI:
+- **Three bundled skills** give Cursor focused knowledge of the `vastai` CLI:
   - **`skills/vastai/SKILL.md`** — renter operations (ssh, copy, logs, exec, destroy, volumes, serverless, env vars, billing).
   - **`skills/vastai-host/SKILL.md`** — GPU provider operations (list/unlist machines, pricing, maintenance, self-tests, earnings, marketplace metrics). Auto-loads on host-intent prompts.
+  - **`skills/vastai-host-support/SKILL.md`** — host self-test failures, `dump-logs`, redacted support bundles, and safe diagnostic evidence collection.
 - **An auto-attach rule** at `rules/vastai.mdc` fires when you're editing IaC files (`*.tf`, `*.yaml`, `infra/`, `deploy/`) and points Cursor at the renter skill.
 - **A `.cursor-plugin/plugin.json` manifest** so the repo is a valid Cursor 2.5 plugin, eligible for the Marketplace and the `/add-plugin` install flow.
 
@@ -34,14 +35,24 @@ The right skill auto-loads based on intent.
 >
 > *"What's the going rate for RTX 4090s in the US right now?"*
 
+**Host support prompts** load `vastai-host-support`:
+
+> *"My host self-test failed. Create a support bundle and explain what is safe to share."*
+
 Every `vastai` invocation includes `--raw` so responses come back as parseable JSON.
+
+## Shared skill source
+
+The three directories under `skills/` are generated snapshots of the canonical skills in [`vast-ai/skills`](https://github.com/vast-ai/skills). `skills.lock.json` pins the exact canonical commit and the SHA-256 digest of every generated file, and validation rejects local drift.
+
+Make skill-content changes in `vast-ai/skills`, not in this wrapper. A scheduled workflow checks the canonical repository and opens an update PR when its bundle changes. Cursor-specific rules, manifests, and installation logic remain in this repository.
 
 ## Install
 
 ### Prerequisites
 
 ```bash
-pip install vastai          # the vastai CLI itself (1.0.x or newer)
+pip install "vastai>=1.4.2" # includes host support bundles and network volumes
 vastai --version
 ```
 
@@ -79,9 +90,12 @@ The `vastai` skill auto-loads and walks through `vastai set api-key …` → `va
 vast-cursor-plugin/
 ├── .cursor-plugin/
 │   └── plugin.json                  # Cursor 2.5 manifest (name, version, author, …)
+├── .github/workflows/sync-skills.yml # updates the generated skill snapshot
 ├── skills/
-│   ├── vastai/SKILL.md              # renter skill
-│   └── vastai-host/SKILL.md         # GPU provider / host skill
+│   ├── vastai/                      # generated renter skill
+│   ├── vastai-host/                 # generated GPU provider / host skill
+│   └── vastai-host-support/         # generated host support skill
+├── skills.lock.json                 # canonical revision and file digests
 ├── rules/
 │   └── vastai.mdc                   # auto-attach rule for IaC files
 └── install.sh                       # pre-marketplace install: copies into ./.cursor/ or ~/.cursor/

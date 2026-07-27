@@ -1,8 +1,8 @@
 {
   "name": "vastai",
   "displayName": "Vast.ai",
-  "version": "0.1.0",
-  "description": "Rent, launch, monitor, and tear down Vast.ai GPU instances from Cursor. Manage volumes, serverless endpoints, environment variables, and billing through natural language.",
+  "version": "0.2.0",
+  "description": "Manage Vast.ai GPU rentals and host operations from Cursor, including self-test diagnostics and redacted support bundles.",
   "author": {
     "name": "Vast.ai",
     "email": "support@vast.ai"
@@ -15,7 +15,9 @@
     "cloud",
     "infrastructure",
     "ml",
-    "training"
+    "training",
+    "host",
+    "diagnostics"
   ],
   "repository": {
     "type": "git",

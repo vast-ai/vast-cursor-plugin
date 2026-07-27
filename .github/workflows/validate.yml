@@ -1,0 +1,24 @@
+name: Plugin validation
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  validate:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Validate manifests and skills
+        run: python scripts/validate_plugin.py
+      - name: Smoke-test source installer
+        shell: bash
+        run: bash tests/install-smoke.sh

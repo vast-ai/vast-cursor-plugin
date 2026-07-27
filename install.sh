@@ -7,7 +7,7 @@
 #   2. User-global: --user copies into ~/.cursor/.
 #
 # What lands:
-#   .cursor/skills/vastai/SKILL.md   — canonical skill (auto-invoke + /vastai)
+#   .cursor/skills/*/                 — renter, host, and host-support skills
 #   .cursor/rules/vastai.mdc         — short auto-attach rule for IaC files
 #
 # Idempotent: re-running upgrades in place. Pass --force to overwrite, --dry-run to preview.
@@ -22,7 +22,9 @@ DRY=0
 while (("$#")); do
   case "$1" in
     --user) MODE=user; shift ;;
-    --target) TARGET="$2"; shift 2 ;;
+    --target)
+      [[ $# -ge 2 ]] || { echo "--target requires a directory" >&2; exit 2; }
+      TARGET="$2"; shift 2 ;;
     --force) FORCE=1; shift ;;
     --dry-run) DRY=1; shift ;;
     -h|--help)
@@ -42,24 +44,23 @@ done
 REPO="$(cd "$(dirname "$0")" && pwd)"
 # Source files live at the Cursor plugin-spec paths (skills/, rules/) at the
 # repo root. install.sh copies them into the user/project .cursor/ tree.
-SKILL_SRC="$REPO/skills/vastai/SKILL.md"
+SKILLS_SRC="$REPO/skills"
 RULE_SRC="$REPO/rules/vastai.mdc"
 
 if [[ $MODE == user ]]; then
   ROOT="$HOME/.cursor"
 elif [[ -n "$TARGET" ]]; then
-  # `realpath -m` canonicalizes without requiring the dir to exist (matters for
-  # --dry-run against a non-existent target). Falls back to a manual resolve
-  # if realpath is missing (rare on Linux).
-  if command -v realpath >/dev/null 2>&1; then
-    ROOT="$(realpath -m "$TARGET")/.cursor"
+  # Avoid GNU-only `realpath -m`; project targets need not exist for dry-runs.
+  if [[ "$TARGET" = /* ]]; then
+    PROJECT_ROOT="${TARGET%/}"
   else
-    ROOT="$(mkdir -p "$TARGET" && cd "$TARGET" && pwd)/.cursor"
+    PROJECT_ROOT="${PWD%/}/${TARGET%/}"
   fi
+  ROOT="$PROJECT_ROOT/.cursor"
 else
   ROOT="$PWD/.cursor"
 fi
-SKILL_DST="$ROOT/skills/vastai/SKILL.md"
+SKILLS_DST="$ROOT/skills"
 RULE_DST="$ROOT/rules/vastai.mdc"
 
 # If $PWD is the plugin repo itself (detected via the manifest file), a default
@@ -70,13 +71,21 @@ if [[ $MODE == project && -z "$TARGET" && -f "$REPO/.cursor-plugin/plugin.json" 
   echo "notice: \$PWD is the plugin repo itself; installing globally into ~/.cursor instead." >&2
   MODE=user
   ROOT="$HOME/.cursor"
-  SKILL_DST="$ROOT/skills/vastai/SKILL.md"
+  SKILLS_DST="$ROOT/skills"
   RULE_DST="$ROOT/rules/vastai.mdc"
   echo "  new target: $ROOT" >&2
   echo
 fi
 
-run() { if [[ $DRY -eq 1 ]]; then echo "[dry-run] $*"; else eval "$@"; fi; }
+run() {
+  if [[ $DRY -eq 1 ]]; then
+    printf '[dry-run]'
+    printf ' %q' "$@"
+    printf '\n'
+  else
+    "$@"
+  fi
+}
 
 require_no_clobber() {
   local target="$1"
@@ -90,17 +99,22 @@ echo "  mode    : $MODE"
 echo "  target  : $ROOT"
 echo
 
-require_no_clobber "$SKILL_DST"
 require_no_clobber "$RULE_DST"
 
-run "mkdir -p '$(dirname "$SKILL_DST")'"
-run "cp '$SKILL_SRC' '$SKILL_DST'"
-echo "✓ skill installed: $SKILL_DST"
+for skill_src in "$SKILLS_SRC"/*; do
+  [[ -f "$skill_src/SKILL.md" ]] || continue
+  skill_name="$(basename "$skill_src")"
+  skill_dst="$SKILLS_DST/$skill_name"
+  require_no_clobber "$skill_dst/SKILL.md"
+  run mkdir -p "$skill_dst"
+  run cp -R "$skill_src/." "$skill_dst/"
+  echo "✓ skill installed: $skill_dst"
+done
 
-run "mkdir -p '$(dirname "$RULE_DST")'"
-run "cp '$RULE_SRC' '$RULE_DST'"
+run mkdir -p "$(dirname "$RULE_DST")"
+run cp "$RULE_SRC" "$RULE_DST"
 echo "✓ rule installed: $RULE_DST"
 
 echo
-echo "Done. Restart Cursor (or reload the workspace) to pick up the new skill + rule."
+echo "Done. Restart Cursor (or reload the workspace) to pick up the new skills + rule."
 echo "Invoke: /vastai in Agent chat, or describe what you want and the skill auto-loads."
