@@ -3,7 +3,7 @@
   "bundle": "vastai",
   "source": {
     "repository": "https://github.com/vast-ai/skills",
-    "revision": "cce19e51c4c1883673fd021bb39d399e6d2ccbe4"
+    "revision": "f8b6f803477c7ac332a0ed866220aa788d85d492"
   },
   "files": [
     {

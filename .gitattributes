@@ -1,0 +1,3 @@
+# Generated snapshots use byte hashes; prevent checkout-time CRLF drift.
+skills/** text eol=lf
+skills.lock.json text eol=lf
