@@ -2,9 +2,9 @@
 name: vastai
 description: Vast.ai CLI for renters — search and launch GPU instances, SSH into them, copy files, run commands, manage volumes and serverless endpoints, manage user environment variables (HF_TOKEN, OPENAI_API_KEY, model config), check billing and balance, register SSH keys, destroy instances. Use this for any prompt about Vast.ai, vastai, GPU rental, or instance lifecycle.
 allowed-tools: Bash(vastai:*)
-compatibility: Linux, macOS
 metadata:
   author: vast-ai
+  compatibility: Linux, macOS
 ---
 
 # vastai
@@ -513,7 +513,7 @@ vastai show deposit <id>                                 # Reserved instance dep
 
 `show invoices` (without `-v1`) is **deprecated** — use `show invoices-v1`.
 
-> **Pagination gotcha:** `show invoices-v1` and `show instances-v1` print *"Fetch next page? (y/N)"* after the first page — even when `--raw` is set. This blocks `claude -p` and other non-interactive sessions. Always pass `--limit N` to short-circuit the prompt. The two commands have **separate flag sets** — check each with `vastai show <subcommand> --help` rather than assuming flags carry over (notably, `--latest-first` is invoices-v1 only).
+> **Pagination gotcha:** `show invoices-v1` and `show instances-v1` print *"Fetch next page? (y/N)"* after the first page — even when `--raw` is set. This blocks headless and other non-interactive agent sessions. Always pass `--limit N` to short-circuit the prompt. The two commands have **separate flag sets** — check each with `vastai show <subcommand> --help` rather than assuming flags carry over (notably, `--latest-first` is invoices-v1 only).
 
 ### Teams
 
@@ -563,7 +563,7 @@ vastai tfa delete --id-to-delete METHOD_ID --code CODE [-t METHOD]        # Remo
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `401` + `"...requires you to have logged in using Two Factor Authentication"` in body | Account has 2FA enabled but no current TFA session key — affects almost all authenticated reads (`show user`, `show ssh-keys`, `show instances-v1`, `show invoices-v1`, `show env-vars`, etc.) | Run `vastai tfa login --method-type {totp,sms,email} --code <CODE>` once per shell. The CLI writes a session key to `~/.config/vastai/vast_tfa_key` and prefers it transparently on subsequent calls. **Tell the user to prefix the command with `!` in the Claude transcript so the 6-digit code does not enter conversation history.** Do NOT ask the user for a new API key — that won't fix it. |
+| `401` + `"...requires you to have logged in using Two Factor Authentication"` in body | Account has 2FA enabled but no current TFA session key — affects almost all authenticated reads (`show user`, `show ssh-keys`, `show instances-v1`, `show invoices-v1`, `show env-vars`, etc.) | Run `vastai tfa login --method-type {totp,sms,email} --code <CODE>` once per shell. The CLI writes a session key to `~/.config/vastai/vast_tfa_key` and prefers it transparently on subsequent calls. **Tell the user to run it from a private terminal or non-recorded shell escape so the 6-digit code does not enter conversation history.** Do NOT ask the user for a new API key — that won't fix it. |
 | `401 Unauthorized` / `Invalid or expired API key` (no 2FA wording) | Invalid key OR scoped key lacks the permission set this command requires | Don't regenerate blindly. First check `env | grep VAST_API_KEY` — a shell env var may be shadowing the stored key. Then run `vastai show api-keys --raw` to inspect the key's scope; widen permissions or use your primary key. Only `vastai set api-key <new>` if the key itself is wrong. |
 | `Your key lacks the machine_read permission group` | Host/admin command (e.g. `metrics gpu`, `show machines`) on a renter account | Use the `vastai-host` skill — these commands are for GPU providers |
 | `Insufficient credits` | Account balance too low | Add credits at <https://cloud.vast.ai/billing/> |

@@ -2,9 +2,9 @@
 name: vastai-host-support
 description: Diagnose Vast.ai host self-test failures and collect safe support evidence with the Vast CLI. Covers self-test machine, automatic failure support bundles, dump-logs, instance/container/daemon logs, local host artifacts, redaction, bundle review, and cleanup auditing. Use when a host asks why verification failed, needs a support bundle, wants diagnostic logs, or mentions dump-logs, self-test failure codes, kaalia, Docker, NVIDIA, port mapping, or host troubleshooting.
 allowed-tools: Bash(vastai:*)
-compatibility: Linux, macOS, Windows; local host artifact collection requires running on the actual Linux host
 metadata:
   author: vast-ai
+  compatibility: Linux, macOS, Windows; local host artifact collection requires running on the actual Linux host
 ---
 
 # vastai-host-support
@@ -23,16 +23,20 @@ Diagnose host self-test failures and produce bounded, redacted evidence for Vast
 4. **Review before sharing.** Bundles apply redaction and are created with owner-only permissions, but still inspect the file list and contents for tenant data, credentials, tokens, environment values, IPs, or other sensitive material before uploading it.
 5. **Do not use a custom test image as a recovery guess.** `--test-image` is for explicitly testing self-test image changes. A custom image can invalidate comparison with the production verification path.
 6. **`--ignore-requirements` does not qualify a host for verification.** It bypasses the requirements gate for diagnostics only; report that limitation clearly.
+7. **Configured port-range scanning is a paired CLI/image feature.** CLI builds containing [vast-cli PR #458](https://github.com/vast-ai/vast-cli/pull/458) map and probe the configured range over TCP and UDP. Confirm `--port-scan-timeout` exists and use a production image that includes the matching TCP/UDP responders. Until the paired image is released, use a custom image only for an explicitly authorized development dogfood run, never as proof of production verification readiness.
 
 ## Preflight
 
 ```bash
 vastai --version
+vastai self-test machine --help
 vastai show machine <MACHINE_ID> --raw
 vastai show instances-v1 --raw --limit 25
 ```
 
 Confirm the machine is visible to the active API key. If the CLI reports missing `machine_read`, inspect the scoped key rather than rotating credentials blindly.
+
+If `self-test machine --help` does not list `--port-scan-timeout`, the installed CLI does not include configured TCP/UDP range scanning. Do not claim that it tested the full host range.
 
 ## Run a self-test
 
@@ -45,6 +49,9 @@ vastai self-test machine <MACHINE_ID> --support-bundle-dir <DIRECTORY> --raw
 
 # Diagnostic-only bypass; a pass does not qualify the host for verification
 vastai self-test machine <MACHINE_ID> --ignore-requirements --raw
+
+# PR #458+ only: increase the timeout for each mapped TCP/UDP probe
+vastai self-test machine <MACHINE_ID> --port-scan-timeout 5 --raw
 ```
 
 On failure, preserve the structured fields such as `stage`, `failure_code`, `reason`, `diagnostics`, and `instance_id`. Surface the server/CLI response as-is before proposing remediation.
@@ -56,6 +63,20 @@ vastai show instances-v1 --raw --limit 25
 ```
 
 Do not destroy an unfamiliar instance. Match it to the self-test result and ask for confirmation before cleanup.
+
+## Diagnose configured TCP/UDP range failures
+
+PR #458-aware self-tests can report the configured range, range source, advertised direct-port capacity, missing mappings, and individual failed TCP/UDP probes. Preserve those structured fields exactly before proposing remediation.
+
+Check:
+
+1. The configured range is valid `start-end` syntax within ports `1024-65535`.
+2. The machine offer advertises at least the range's port count plus four fixed self-test mappings.
+3. Every configured container port has both a TCP and UDP mapping.
+4. Host firewall, router/NAT, and upstream rules allow both protocols.
+5. The selected self-test image contains the matching TCP listener and UDP echo responder.
+
+Do not describe a timeout as proof that the port is closed—the failure may also be a missing mapping, NAT hairpin behavior, firewall drop, stale offer metadata, or a mismatched test image. Report the exact public endpoint and protocol only in private diagnostic output, and redact them before sharing broadly.
 
 ## Create a manual diagnostic bundle
 
@@ -108,6 +129,8 @@ vastai logs <INSTANCE_ID> --tail 200 --raw
 |---|---|
 | Requirements/preflight failure | Keep the structured requirement result; use `--ignore-requirements` only for an explicitly diagnostic run |
 | Test instance never becomes usable | Preserve `failure_code`, progress endpoint fields, mapped ports, and instance/daemon logs |
+| Configured direct-port capacity failure | Compare range count plus four fixed mappings with the offer's `direct_port_count`; do not assume a fixed platform maximum |
+| Missing or failed TCP/UDP range probes | Preserve missing mappings and per-protocol failures; verify both firewall protocols, NAT, offer metadata, and the paired responder image |
 | Docker, CDI, or NVIDIA startup failure | Run `dump-logs` with the failed instance ID; add local artifacts only on the actual host |
 | Support bundle write failure | Choose a writable `--support-bundle-dir` or `--output-dir`; report the exact filesystem error |
 | Bundle has collection errors | Keep `collection-errors.json`; partial evidence is useful and should not be represented as complete |

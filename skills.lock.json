@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "bundle": "vastai",
+  "source": {
+    "repository": "https://github.com/vast-ai/skills",
+    "revision": "cce19e51c4c1883673fd021bb39d399e6d2ccbe4"
+  },
+  "files": [
+    {
+      "path": "skills/vastai/LICENSE",
+      "sha256": "9c56237ce46085959623f16061a07a327805051c0024ced2558facb030398a01"
+    },
+    {
+      "path": "skills/vastai/SKILL.md",
+      "sha256": "bbc3f21e1de9c86d4431faae79fcd08f1b01fe391333f7e60d0aae237669fd7e"
+    },
+    {
+      "path": "skills/vastai-host/LICENSE",
+      "sha256": "9c56237ce46085959623f16061a07a327805051c0024ced2558facb030398a01"
+    },
+    {
+      "path": "skills/vastai-host/SKILL.md",
+      "sha256": "46262a276cc67a01dbd5ab4963b3c361964cf84b405e1e797a8d2652ada08e83"
+    },
+    {
+      "path": "skills/vastai-host-support/LICENSE",
+      "sha256": "9c56237ce46085959623f16061a07a327805051c0024ced2558facb030398a01"
+    },
+    {
+      "path": "skills/vastai-host-support/SKILL.md",
+      "sha256": "3c5ab59bf52dc6485a349b359c0fbb671c860624108d8234cbb2ec9b95a6fb10"
+    }
+  ]
+}

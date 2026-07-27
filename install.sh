@@ -7,7 +7,7 @@
 #   2. User-global: --user copies into ~/.cursor/.
 #
 # What lands:
-#   .cursor/skills/*/SKILL.md         — renter, host, and host-support skills
+#   .cursor/skills/*/                 — renter, host, and host-support skills
 #   .cursor/rules/vastai.mdc         — short auto-attach rule for IaC files
 #
 # Idempotent: re-running upgrades in place. Pass --force to overwrite, --dry-run to preview.
@@ -104,10 +104,10 @@ require_no_clobber "$RULE_DST"
 for skill_src in "$SKILLS_SRC"/*; do
   [[ -f "$skill_src/SKILL.md" ]] || continue
   skill_name="$(basename "$skill_src")"
-  skill_dst="$SKILLS_DST/$skill_name/SKILL.md"
-  require_no_clobber "$skill_dst"
-  run mkdir -p "$(dirname "$skill_dst")"
-  run cp "$skill_src/SKILL.md" "$skill_dst"
+  skill_dst="$SKILLS_DST/$skill_name"
+  require_no_clobber "$skill_dst/SKILL.md"
+  run mkdir -p "$skill_dst"
+  run cp -R "$skill_src/." "$skill_dst/"
   echo "✓ skill installed: $skill_dst"
 done
 

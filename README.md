@@ -41,6 +41,12 @@ The right skill auto-loads based on intent.
 
 Every `vastai` invocation includes `--raw` so responses come back as parseable JSON.
 
+## Shared skill source
+
+The three directories under `skills/` are generated snapshots of the canonical skills in [`vast-ai/skills`](https://github.com/vast-ai/skills). `skills.lock.json` pins the exact canonical commit and the SHA-256 digest of every generated file, and validation rejects local drift.
+
+Make skill-content changes in `vast-ai/skills`, not in this wrapper. A scheduled workflow checks the canonical repository and opens an update PR when its bundle changes. Cursor-specific rules, manifests, and installation logic remain in this repository.
+
 ## Install
 
 ### Prerequisites
@@ -84,10 +90,12 @@ The `vastai` skill auto-loads and walks through `vastai set api-key …` → `va
 vast-cursor-plugin/
 ├── .cursor-plugin/
 │   └── plugin.json                  # Cursor 2.5 manifest (name, version, author, …)
+├── .github/workflows/sync-skills.yml # updates the generated skill snapshot
 ├── skills/
-│   ├── vastai/SKILL.md              # renter skill
-│   ├── vastai-host/SKILL.md         # GPU provider / host skill
-│   └── vastai-host-support/SKILL.md # host diagnostics and support bundles
+│   ├── vastai/                      # generated renter skill
+│   ├── vastai-host/                 # generated GPU provider / host skill
+│   └── vastai-host-support/         # generated host support skill
+├── skills.lock.json                 # canonical revision and file digests
 ├── rules/
 │   └── vastai.mdc                   # auto-attach rule for IaC files
 └── install.sh                       # pre-marketplace install: copies into ./.cursor/ or ~/.cursor/

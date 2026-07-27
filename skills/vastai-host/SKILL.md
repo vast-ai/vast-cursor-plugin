@@ -2,9 +2,9 @@
 name: vastai-host
 description: Vast.ai CLI for GPU hosts/providers — list and unlist machines on the marketplace, set pricing (min-bid, default GPU price), configure default jobs, schedule maintenance windows, run routine self-tests, view earnings, monitor marketplace metrics (gpu, gpu-trends, gpu-locations), manage network disks and clusters, defrag machines, and clean up expired storage. Use this for hosting, listing, pricing, maintenance, earnings, metrics, or routine provider operations. Use vastai-host-support for self-test failures, support bundles, and diagnostic log collection.
 allowed-tools: Bash(vastai:*)
-compatibility: Linux, macOS
 metadata:
   author: vast-ai
+  compatibility: Linux, macOS
 ---
 
 # vastai-host
@@ -29,7 +29,7 @@ These rules apply to every invocation. Do not skip them.
 5. **Host actions are visible to renters and impact billing.** Listing, unlisting, price changes, maintenance windows, `defrag machines`, and `cleanup machine` all have side effects on live renters or on your earnings. Before running any of these, confirm with the user — quote the exact command back. Do not run them as a "let me just verify" probe.
 6. **`schedule maint` evicts live renters at the start time.** Never schedule a maintenance window without explicit user confirmation of the start date and duration. Active renters on the machine will be terminated when the window opens.
 7. **`defrag machines` is disruptive.** It reorganizes the named machines' GPU assignments to free up larger multi-GPU offers — running instances on those machines may be reshuffled or interrupted. The subcommand is `defrag machines` (its own `--help` lies — the usage line reads `vastai defragment machines IDs`, but `vastai defragment machines …` returns `invalid choice` at the parser; only `defrag machines` actually executes). Takes positional machine IDs (e.g. `vastai defrag machines 100 101`); confirm the exact ID list with the user before running.
-8. **`self-test machine` launches a temporary paid instance.** Confirm the machine ID and that the user accepts the small rental charge before running it. The command normally cleans up its test instance, but audit instances afterward if the command is interrupted. Use the `vastai-host-support` skill for failure diagnostics and support bundles.
+8. **`self-test machine` launches a temporary paid instance.** Confirm the machine ID and that the user accepts the small rental charge before running it. The command normally cleans up its test instance, but audit instances afterward if the command is interrupted. Current development builds that include [vast-cli PR #458](https://github.com/vast-ai/vast-cli/pull/458) also map and probe every configured direct port over both TCP and UDP; use `vastai self-test machine --help` to confirm that `--port-scan-timeout` is available. Use the `vastai-host-support` skill for failure diagnostics and support bundles.
 
 ## CLI prerequisite
 
@@ -55,7 +55,7 @@ vastai show user                                         # Verify auth
 
 > **Precedence trap.** Resolution: `--api-key` flag > `$VAST_API_KEY` > stored key. A `VAST_API_KEY` in the shell silently overrides whatever you just persisted with `vastai set api-key`. The CLI prints `⚠️ VAST_API_KEY is set in your environment and overrides the key you just saved` but it's easy to miss. For host work especially — where the persisted key may be a deliberately-scoped monitoring key — check `env | grep VAST_API_KEY` before authenticated calls and `unset` it if you don't want it active.
 
-> **2FA.** If the host account has 2FA enabled, run `vastai tfa login --method-type {totp,sms,email} --code <CODE>` once per shell — the CLI writes a session key to `~/.config/vastai/vast_tfa_key` and uses it transparently. Without an active TFA session, `show machines`, `show earnings`, `show user`, `metrics gpu*`, etc. all return a `401` whose body says *"requires you to have logged in using Two Factor Authentication."* Recommend prefixing the login command with `!` in the Claude transcript so the 6-digit code does not enter conversation history. See the "Common errors" table for the exact pattern.
+> **2FA.** If the host account has 2FA enabled, run `vastai tfa login --method-type {totp,sms,email} --code <CODE>` once per shell — the CLI writes a session key to `~/.config/vastai/vast_tfa_key` and uses it transparently. Without an active TFA session, `show machines`, `show earnings`, `show user`, `metrics gpu*`, etc. all return a `401` whose body says *"requires you to have logged in using Two Factor Authentication."* Run the login from a private terminal outside the agent transcript, or use the harness's non-recorded shell escape when available, so the 6-digit code does not enter conversation history. See the "Common errors" table for the exact pattern.
 
 Machine registration (one-time, on the host machine itself): <https://vast.ai/console/host/setup/>
 
@@ -109,9 +109,22 @@ vastai search templates 'name=pytorch recommended=true'
 vastai show machines                                     # List all machines you host
 vastai show machine <id>                                 # Single machine details
 vastai self-test machine <id>                            # Paid temporary test; confirm first. Use vastai-host-support on failure
+vastai self-test machine <id> --port-scan-timeout 5      # PR #458+ only; per-port TCP/UDP probe timeout in seconds
 vastai reports <id>                                      # Renter-submitted reports for a machine
 vastai delete machine <id>                               # Permanently remove from your account
 ```
+
+#### Configured direct-port scan
+
+CLI builds containing [PR #458](https://github.com/vast-ai/vast-cli/pull/458) discover the host-configured range, add TCP and UDP Docker mappings for every port, and probe the externally mapped ports during self-test. Before relying on this behavior, confirm the installed command exposes the flag:
+
+```bash
+vastai self-test machine --help                         # Must show --port-scan-timeout
+```
+
+The range usually comes from `/var/lib/vastai_kaalia/host_port_range` when the CLI runs on the actual host, or from direct-port metadata on the temporary test instance. The machine offer's `direct_port_count` is the capacity source of truth: the configured range needs its full port count plus the self-test's four fixed mappings. There is no fixed platform-wide maximum.
+
+Do not increase `--port-scan-timeout` as a substitute for fixing missing mappings, TCP/UDP firewall rules, NAT behavior, or an undersized advertised direct-port capacity. A failed range scan belongs in `vastai-host-support`.
 
 ### Listing & pricing
 
@@ -248,10 +261,11 @@ Team creation does not convert the personal account or rebind the calling key. I
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `401` + `"...requires you to have logged in using Two Factor Authentication"` in body | Account has 2FA enabled but no current TFA session — affects almost every host read (`show machines`, `show earnings`, `metrics gpu*`, `show user`) | Run `vastai tfa login --method-type {totp,sms,email} --code <CODE>` once per shell. Recommend `!` prefix to keep the 6-digit code out of the transcript. Do NOT rotate the API key — that won't fix it. |
+| `401` + `"...requires you to have logged in using Two Factor Authentication"` in body | Account has 2FA enabled but no current TFA session — affects almost every host read (`show machines`, `show earnings`, `metrics gpu*`, `show user`) | Run `vastai tfa login --method-type {totp,sms,email} --code <CODE>` once per shell from a private terminal or non-recorded shell escape. Keep the 6-digit code out of the transcript. Do NOT rotate the API key — that won't fix it. |
 | `401 Unauthorized` / `Invalid or expired API key` (no 2FA wording) | Invalid key OR scoped key lacks the permission set this command requires | First `env | grep VAST_API_KEY` — a shell env var may shadow the stored key. Then `vastai show api-keys --raw` to inspect scope; widen permissions or use your primary key. Only `vastai set api-key <new>` if the key itself is wrong. |
 | `Your key lacks the machine_read permission group` | Scoped API key missing host permissions | Use your primary key, or recreate the scoped key passing `--permission_file ./perms.json` to `create api-key`, where the JSON grants the `machine_read` group. (Inline JSON via `--permissions` does not work — the flag takes a file path.) |
 | `Machine not found` | Wrong machine ID or machine deleted | `vastai show machines --raw` to list current IDs |
+| Direct-port capacity or TCP/UDP range scan failure | Configured range plus four fixed mappings exceeds the offer's `direct_port_count`, mappings are missing, or an external TCP/UDP probe cannot reach the host | Preserve the structured self-test result and use `vastai-host-support`; verify the configured range, both firewall protocols, mapped ports, and the matching self-test image before retrying |
 | `Cannot unlist machine with active rentals` | Existing renters on the machine | Wait for rentals to end, or contact support to evict |
 | `Maintenance window conflicts with active rental` | Renter has time on the requested window | Choose a later start, or accept that the renter will be evicted |
 | `defrag in progress` | Another `defrag machines` operation is already running on this account | Wait for it to finish; `vastai show machines --raw` shows defrag state |
